@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Tool Change – Mobile Board (3 Operators)</title>
+<style>
+  :root{
+    --bg:#0d0f1a; --surface:#151933; --surface2:#1b2150;
+    --text:#e9ecff; --muted:#a2a8d4; --border:#2a3170; --accent:#7aa2ff;
+    --card:#21275e;
+    --green:#22c55e; --yellow:#f59e0b; --red:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0a0c1a,#151b3a);color:var(--text);
+       font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;}
+  header{
+    position:sticky; top:0; z-index:10;
+    display:flex; gap:10px; align-items:center; padding:12px 14px;
+    backdrop-filter: blur(8px);
+    background:rgba(10,12,24,.8);
+    border-bottom:1px solid var(--border);
+  }
+  header h1{margin:0; font-size:16px; letter-spacing:.2px;}
+  .lang{margin-left:auto; display:flex; gap:8px}
+  .lang button{border:1px solid var(--border); background:var(--surface2); color:var(--text);
+               padding:6px 10px; border-radius:12px; font-weight:700}
+  .tabs{
+    display:flex; gap:8px; padding:10px; overflow:auto hidden; background:linear-gradient(180deg,var(--surface),var(--surface2));
+    border-bottom:1px solid var(--border);
+  }
+  .tab{
+    flex:0 0 auto; min-width:130px;
+    border:1px solid var(--border); border-radius:12px; padding:10px 12px;
+    background:rgba(255,255,255,.03); color:var(--text);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .tab.active{outline:2px solid var(--accent)}
+  .total{font-size:12px;color:var(--muted)}
+  main{padding:12px; max-width:920px; margin:0 auto;}
+  .actionsTop{display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;}
+  .btn{border:1px solid var(--border); background:var(--surface2); color:var(--text); padding:10px 12px; border-radius:12px; font-weight:700}
+  .list{display:flex; flex-direction:column; gap:10px;}
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px;
+    display:grid; gap:8px;
+    grid-template-columns: 36px 1fr auto;
+    grid-template-areas: "step title move" "meta meta controls";
+  }
+  .step{grid-area:step; align-self:center; text-align:center; font-weight:700; color:var(--muted)}
+  .title{grid-area:title; background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:10px;
+         padding:10px; outline:none; min-height:42px}
+  .title[contenteditable]:empty:before{content:attr(data-ph); color:var(--muted)}
+  .move{grid-area:move; display:flex; flex-direction:column; gap:6px}
+  .icon{border:1px solid var(--border); background:transparent; color:var(--text); border-radius:10px; padding:8px}
+  .controls{grid-area:controls; display:flex; gap:6px; flex-wrap:wrap}
+  .status{display:flex; gap:6px}
+  .pill{border:1px solid var(--border); border-radius:999px; padding:6px 10px; background:rgba(255,255,255,.04); color:var(--text)}
+  .time input{width:80px; background:transparent; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px}
+  .state{font-size:12px; color:var(--muted)}
+  .status .sbtn{border:1px solid var(--border); border-radius:10px; padding:8px 10px; font-weight:900; background:transparent; color:var(--text)}
+  .sbtn[data-k="VA"].active{background:var(--green)}
+  .sbtn[data-k="NW"].active{background:var(--yellow); color:#111}
+  .sbtn[data-k="W"].active{background:var(--red)}
+  .card.status-VA{border-color:rgba(34,197,94,.7)}
+  .card.status-NW{border-color:rgba(245,158,11,.8)}
+  .card.status-W{border-color:rgba(239,68,68,.8)}
+  .hint{color:var(--muted); font-size:13px; padding:8px 12px}
+  @media (min-width:900px){
+    /* On large screens show three columns side-by-side */
+    .desktopGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px}
+    .pane{border:1px solid var(--border); border-radius:14px; padding:12px; background:linear-gradient(180deg,var(--surface),var(--surface2))}
+    .pane h3{margin:0 0 6px 0}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 data-i18n="title">Tool Change – Mobile Board</h1>
+  <div class="lang">
+    <button data-lang="en">🇬🇧 EN</button>
+    <button data-lang="hu">🇭🇺 HU</button>
+  </div>
+</header>
+
+<div class="tabs" id="tabs"></div>
+
+<main>
+  <div class="actionsTop">
+    <button class="btn" id="add" data-i18n="add">Add activity</button>
+    <button class="btn" id="reset" data-i18n="reset">Reset board</button>
+    <button class="btn" id="export" data-i18n="export">Export JSON</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none">
+    <button class="btn" id="import" data-i18n="import">Import JSON</button>
+  </div>
+
+  <!-- For desktop users we render all three panes; on mobile we only show the active one -->
+  <div class="desktopGrid" id="desktopGrid"></div>
+
+  <section class="pane" id="pane">
+    <h3 id="paneTitle">Operator 1</h3>
+    <div class="list" id="list"></div>
+  </section>
+
+  <div class="hint" data-i18n="hint">
+    Tip: On mobile, reorder with ▲/▼. Move to another operator with the dropdown. Tap VA / NW / W to tag green / yellow / red. Minutes are summed per operator.
+  </div>
+</main>
+
+<template id="card-tpl">
+  <article class="card">
+    <div class="step">1</div>
+    <div class="title" contenteditable="plaintext-only" data-ph="Type activity..."></div>
+    <div class="move">
+      <button class="icon up" title="Move up">▲</button>
+      <button class="icon down" title="Move down">▼</button>
+    </div>
+    <div class="meta">
+      <span class="pill time"><span data-i18n="time">Time</span> (min): <input type="number" min="0" step="1" value="0"></span>
+      <select class="pill who">
+        <option value="1">Operator 1</option>
+        <option value="2">Operator 2</option>
+        <option value="3">Operator 3</option>
+      </select>
+      <span class="pill state" data-i18n="stateNone">No status</span>
+    </div>
+    <div class="controls">
+      <div class="status">
+        <button class="sbtn" data-k="VA">VA</button>
+        <button class="sbtn" data-k="NW">NW</button>
+        <button class="sbtn" data-k="W">W</button>
+      </div>
+      <button class="icon copy" title="Duplicate">📄</button>
+      <button class="icon del" title="Delete">🗑️</button>
+    </div>
+  </article>
+</template>
+
+<script>
+const L = {
+  en:{
+    title:"Tool Change – Mobile Board",
+    op:"Operator",
+    add:"Add activity",
+    reset:"Reset board",
+    export:"Export JSON",
+    import:"Import JSON",
+    time:"Time",
+    stateNone:"No status",
+    hint:"Tip: On mobile, reorder with ▲/▼. Move to another operator with the dropdown. Tap VA / NW / W to tag green / yellow / red. Minutes are summed per operator."
+  },
+  hu:{
+    title:"Szerszámcsere – Mobil tábla",
+    op:"Operátor",
+    add:"Tevékenység hozzáadása",
+    reset:"Tábla visszaállítása",
+    export:"JSON exportálása",
+    import:"JSON importálása",
+    time:"Idő",
+    stateNone:"Nincs státusz",
+    hint:"Tipp: Mobilon a ▲/▼ gombbal rendezd. Másik operátorhoz a legördülővel mozgasd. A VA/NW/W gombbal jelöld zöld/sárga/piros színnel. A percek operátoronként összeadódnak."
+  }
+};
+let lang='en';
+let state = load() || {
+  ops: {
+    "1": [
+{"t":"Step 1 — edit text", "m":0, "s":""},
+{"t":"Step 2 — edit text", "m":0, "s":""},
+{"t":"Step 3 — edit text", "m":0, "s":""},
+{"t":"Step 4 — edit text", "m":0, "s":""},
+{"t":"Step 5 — edit text", "m":0, "s":""},
+{"t":"Step 6 — edit text", "m":0, "s":""},
+{"t":"Step 7 — edit text", "m":0, "s":""}
+],
+    "2": [
+{"t":"Step 8 — edit text", "m":0, "s":""},
+{"t":"Step 9 — edit text", "m":0, "s":""},
+{"t":"Step 10 — edit text", "m":0, "s":""},
+{"t":"Step 11 — edit text", "m":0, "s":""},
+{"t":"Step 12 — edit text", "m":0, "s":""},
+{"t":"Step 13 — edit text", "m":0, "s":""},
+{"t":"Step 14 — edit text", "m":0, "s":""}
+],
+    "3": [
+{"t":"Step 15 — edit text", "m":0, "s":""},
+{"t":"Step 16 — edit text", "m":0, "s":""},
+{"t":"Step 17 — edit text", "m":0, "s":""},
+{"t":"Step 18 — edit text", "m":0, "s":""},
+{"t":"Step 19 — edit text", "m":0, "s":""},
+{"t":"Üres keretet kiemel + kitolja", "m":0, "s":""},
+{"t":"Szerszámot gépbe rögzít", "m":0, "s":""}
+]
+  }
+};
+
+function i18n(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key=el.getAttribute('data-i18n');
+    el.textContent = L[lang][key] || el.textContent;
+  });
+  document.querySelector('h1').textContent = L[lang].title;
+  renderTabs();
+  renderActive();
+  renderDesktopGrid();
+}
+
+function save(){ localStorage.setItem('toolchange_mobile_v1', JSON.stringify(state)); }
+function load(){ try{ return JSON.parse(localStorage.getItem('toolchange_mobile_v1')); }catch(e){ return null; } }
+
+const tabs = document.getElementById('tabs');
+let active = "1";
+
+function renderTabs(){
+  tabs.innerHTML='';
+  [1,2,3].forEach(i=>{
+    const div = document.createElement('button');
+    div.className='tab'+(String(i)===active?' active':'');
+    const total = (state.ops[String(i)]||[]).reduce((a,b)=>a+(+b.m||0),0);
+    div.innerHTML = `<span>${L[lang].op} ${i}</span> <span class="total">${total} min</span>`;
+    div.onclick=()=>{active=String(i); renderActive(); document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); div.classList.add('active');};
+    tabs.appendChild(div);
+  });
+}
+
+function renderDesktopGrid(){
+  const grid=document.getElementById('desktopGrid');
+  grid.innerHTML='';
+  [1,2,3].forEach(i=>{
+    const pane=document.createElement('section');
+    pane.className='pane';
+    const total = (state.ops[String(i)]||[]).reduce((a,b)=>a+(+b.m||0),0);
+    pane.innerHTML=`<h3>${L[lang].op} ${i} — ${total} min</h3><div class="list"></div>`;
+    const list=pane.querySelector('.list');
+    state.ops[String(i)].forEach((it, idx)=> list.appendChild(cardEl(it, String(i), idx)));
+    grid.appendChild(pane);
+  });
+}
+
+function renderActive(){
+  document.getElementById('paneTitle').textContent = `${L[lang].op} ${active}`;
+  const list = document.getElementById('list');
+  list.innerHTML='';
+  state.ops[active].forEach((it, idx)=> list.appendChild(cardEl(it, active, idx)));
+}
+
+function cardEl(item, op, idx){
+  const node = document.getElementById('card-tpl').content.firstElementChild.cloneNode(true);
+  node.querySelector('.step').textContent = idx+1;
+  const titleEl = node.querySelector('.title');
+  titleEl.textContent = item.t || '';
+  const timeEl = node.querySelector('.time input');
+  timeEl.value = item.m || 0;
+  const who = node.querySelector('.who');
+  who.value = op;
+  setStatus(node, item.s || '');
+
+  // Events
+  titleEl.addEventListener('input', ()=>{ item.t = titleEl.textContent.trim(); save(); });
+  timeEl.addEventListener('input', ()=>{ item.m = +timeEl.value||0; save(); renderTabs(); renderDesktopGrid(); });
+  who.addEventListener('change', ()=>{
+    moveCard(op, who.value, idx);
+  });
+  node.querySelector('.up').onclick = ()=> moveReorder(op, idx, Math.max(0, idx-1));
+  node.querySelector('.down').onclick = ()=> moveReorder(op, idx, Math.min(state.ops[op].length-1, idx+1));
+  node.querySelector('.copy').onclick = ()=>{
+    state.ops[op].splice(idx+1,0, JSON.parse(JSON.stringify(item)));
+    save(); renderActive(); renderTabs(); renderDesktopGrid();
+  };
+  node.querySelector('.del').onclick = ()=>{
+    state.ops[op].splice(idx,1);
+    save(); renderActive(); renderTabs(); renderDesktopGrid();
+  };
+  node.querySelectorAll('.sbtn').forEach(b=> b.onclick = ()=>{
+    item.s = b.dataset.k;
+    setStatus(node, item.s);
+    save();
+  });
+  return node;
+}
+
+function setStatus(node, s){
+  node.classList.remove('status-VA','status-NW','status-W');
+  node.querySelectorAll('.sbtn').forEach(b=> b.classList.toggle('active', b.dataset.k===s));
+  if(s){ node.classList.add('status-'+s); }
+  node.querySelector('.state').textContent = s ? ({VA:'Value Added (VA)', NW:'Non-Value (NW)', W:'Waste (W)'}[s]) : L[lang].stateNone;
+}
+
+function moveReorder(op, from, to){
+  if(from===to) return;
+  const arr = state.ops[op];
+  const [it] = arr.splice(from,1);
+  arr.splice(to,0,it);
+  save(); renderActive(); renderTabs(); renderDesktopGrid();
+}
+function moveCard(fromOp, toOp, idx){
+  if(fromOp===toOp) return;
+  const [it] = state.ops[fromOp].splice(idx,1);
+  state.ops[toOp].push(it);
+  save(); renderActive(); renderTabs(); renderDesktopGrid();
+}
+
+// Buttons
+document.getElementById('add').onclick = ()=>{
+  state.ops[active].push({t:"",m:0,s:""}); save(); renderActive(); renderTabs(); renderDesktopGrid();
+  setTimeout(()=>{
+    const last = document.querySelector('#list .card:last-child .title'); last && last.focus();
+  },0);
+};
+document.getElementById('reset').onclick = ()=>{
+  if(confirm('Clear all activities?')){
+    state = {ops:{"1":[],"2":[],"3":[]}}; save(); renderTabs(); renderActive(); renderDesktopGrid();
+  }
+};
+document.getElementById('export').onclick = ()=>{
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'toolchange_board.json';
+  a.click();
+};
+document.getElementById('import').onclick = ()=> document.getElementById('importFile').click();
+document.getElementById('importFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{ try{ state = JSON.parse(reader.result); save(); renderTabs(); renderActive(); renderDesktopGrid(); }catch(err){ alert('Invalid JSON'); } };
+  reader.readAsText(file);
+});
+
+// Language
+document.querySelectorAll('.lang button').forEach(b=> b.addEventListener('click', ()=>{
+  lang=b.dataset.lang; i18n();
+}));
+
+// Initial render
+i18n();
+</script>
+</body>
+</html>
